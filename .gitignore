@@ -1,0 +1,32 @@
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# FiveM / Cfx
+*.cache
+cache/
+caches/
+logs/
+*.log
+*.rpf
+*.db
+
+# Node.js (se usato)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Visual Studio / C# (nel caso di scripting con .NET)
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+
+# Backup e temporanei
+*.tmp
+*.bak
+*.old
+
+*.bat
+*.ps1
