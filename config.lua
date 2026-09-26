@@ -1,5 +1,7 @@
 Config = {}
 
+Config.Framework = 'auto' -- auto | esx | qbcore | qbox
+
 Config.Locale = 'it'
 
 -- ============================================
