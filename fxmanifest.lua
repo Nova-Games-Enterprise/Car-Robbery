@@ -2,21 +2,27 @@ fx_version 'cerulean'
 game 'gta5'
 
 author 'bacasuoro'
-description 'Sistema di furto veicoli per ESX'
+description 'NGE Car Robbery per ESX/QBCore/Qbox'
 version '1.0.0'
 
-shared_script 'config.lua'
+shared_scripts {
+    '@ox_lib/init.lua',
+    'config.lua'
+}
 
 client_scripts {
+    'client/framework.lua',
     'client.lua'
 }
 
 server_scripts {
+    'server/framework.lua',
     'server.lua'
 }
 
 dependencies {
-    'es_extended'
+    '/onesync',
+    'ox_lib'
 }
 
 escrow_ignore {
