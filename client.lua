@@ -334,6 +334,7 @@ function DeliverVehicle()
 end
 
 function EndMission()
+    TriggerServerEvent('nge_carrobbery:endMission')
     if deliveryBlip then
         RemoveBlip(deliveryBlip)
         deliveryBlip = nil
