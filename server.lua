@@ -113,7 +113,22 @@ AddEventHandler('esx_vehicle_theft:rewardPlayer', function(_clientDeliveryNumber
 
     if Config.MoneyAccount == 'money' then
         xPlayer.addMoney(totalReward)
-        xPlayer.showNotification('~g~+
+        xPlayer.showNotification(('~g~Ricompensa: %s'):format(totalReward))
+    elseif Config.MoneyAccount == 'black_money' then
+        xPlayer.addAccountMoney('black_money', totalReward)
+        xPlayer.showNotification(('~g~Ricompensa sporca: %s'):format(totalReward))
+    elseif Config.MoneyAccount == 'bank' then
+        xPlayer.addAccountMoney('bank', totalReward)
+        xPlayer.showNotification(('~g~Ricompensa banca: %s'):format(totalReward))
+    end
+
+    if stage >= 3 then
+        activeMissions[xPlayer.identifier] = nil
+    else
+        mission.stage = stage + 1
+        mission.stageStartedAt = os.time()
+    end
+end)
 
 -- Alert polizia
 RegisterNetEvent('esx_vehicle_theft:alertPolice')
