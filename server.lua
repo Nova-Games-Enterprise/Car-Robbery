@@ -1,21 +1,22 @@
-ESX = nil
 local activeMissions = {}
 local trackedVehicles = {}
 local jammedVehicles = {}
 
-TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+CreateThread(function()
+    if not NGEFramework.WaitReady() then error('[nge_carrobbery] framework unavailable') end
+end)
 
 -- Callback controllo polizia online
-ESX.RegisterServerCallback('esx_vehicle_theft:checkPolice', function(source, cb)
+NGEFramework.RegisterCallback('nge_carrobbery:checkPolice', function(source, cb)
     local policeCount = 0
-    local xPlayers = ESX.GetPlayers()
+    local xPlayers = NGEFramework.Sources()
     
     for i=1, #xPlayers, 1 do
-        local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+        local xPlayer = NGEFramework.Get(xPlayers[i])
         
         if xPlayer then
             for _, job in pairs(Config.PoliceJobs) do
-                if xPlayer.job.name == job then
+                if NGEFramework.Job(xPlayer) == job then
                     policeCount = policeCount + 1
                     break
                 end
@@ -27,13 +28,13 @@ ESX.RegisterServerCallback('esx_vehicle_theft:checkPolice', function(source, cb)
 end)
 
 -- Callback inizio missione
-ESX.RegisterServerCallback('esx_vehicle_theft:canStartMission', function(source, cb)
-    local xPlayer = ESX.GetPlayerFromId(source)
+NGEFramework.RegisterCallback('nge_carrobbery:canStartMission', function(source, cb)
+    local xPlayer = NGEFramework.Get(source)
     
-    if activeMissions[xPlayer.identifier] then
+    if activeMissions[NGEFramework.Identifier(xPlayer)] then
         cb(false)
     else
-        activeMissions[xPlayer.identifier] = {
+        activeMissions[NGEFramework.Identifier(xPlayer)] = {
             source = source,
             stage = 1,
             stageStartedAt = os.time(),
@@ -44,33 +45,15 @@ ESX.RegisterServerCallback('esx_vehicle_theft:canStartMission', function(source,
 end)
 
 -- Callback acquisto GPS Jammer
-ESX.RegisterServerCallback('esx_vehicle_theft:buyJammer', function(source, cb)
-    local xPlayer = ESX.GetPlayerFromId(source)
+NGEFramework.RegisterCallback('nge_carrobbery:buyJammer', function(source, cb)
+    local xPlayer = NGEFramework.Get(source)
     
     if not xPlayer then 
         cb(false)
         return
     end
     
-    local playerMoney = 0
-    
-    if Config.MoneyAccount == 'money' then
-        playerMoney = xPlayer.getMoney()
-    elseif Config.MoneyAccount == 'black_money' then
-        playerMoney = xPlayer.getAccount('black_money').money
-    elseif Config.MoneyAccount == 'bank' then
-        playerMoney = xPlayer.getAccount('bank').money
-    end
-    
-    if playerMoney >= Config.GPSJammerPrice then
-        if Config.MoneyAccount == 'money' then
-            xPlayer.removeMoney(Config.GPSJammerPrice)
-        elseif Config.MoneyAccount == 'black_money' then
-            xPlayer.removeAccountMoney('black_money', Config.GPSJammerPrice)
-        elseif Config.MoneyAccount == 'bank' then
-            xPlayer.removeAccountMoney('bank', Config.GPSJammerPrice)
-        end
-        
+    if NGEFramework.RemoveMoney(xPlayer, Config.MoneyAccount or 'money', Config.GPSJammerPrice, 'gps-jammer') then
         cb(true)
     else
         cb(false)
@@ -78,13 +61,13 @@ ESX.RegisterServerCallback('esx_vehicle_theft:buyJammer', function(source, cb)
 end)
 
 -- Ricompensa player
-RegisterNetEvent('esx_vehicle_theft:rewardPlayer')
-AddEventHandler('esx_vehicle_theft:rewardPlayer', function(_clientDeliveryNumber, _clientSpeedBonus)
+RegisterNetEvent('nge_carrobbery:rewardPlayer')
+AddEventHandler('nge_carrobbery:rewardPlayer', function(_clientDeliveryNumber, _clientSpeedBonus)
     local src = source
-    local xPlayer = ESX.GetPlayerFromId(src)
+    local xPlayer = NGEFramework.Get(src)
     if not xPlayer then return end
 
-    local mission = activeMissions[xPlayer.identifier]
+    local mission = activeMissions[NGEFramework.Identifier(xPlayer)]
     if not mission or mission.source ~= src then
         print(('[CAR ROBBERY] Rejected reward without active mission from %s'):format(src))
         return
@@ -111,19 +94,13 @@ AddEventHandler('esx_vehicle_theft:rewardPlayer', function(_clientDeliveryNumber
     local totalReward = math.max(0, (tonumber(reward) or 0) + speedBonus)
     if totalReward <= 0 then return end
 
-    if Config.MoneyAccount == 'money' then
-        xPlayer.addMoney(totalReward)
-        xPlayer.showNotification(('~g~Ricompensa: %s'):format(totalReward))
-    elseif Config.MoneyAccount == 'black_money' then
-        xPlayer.addAccountMoney('black_money', totalReward)
-        xPlayer.showNotification(('~g~Ricompensa sporca: %s'):format(totalReward))
-    elseif Config.MoneyAccount == 'bank' then
-        xPlayer.addAccountMoney('bank', totalReward)
-        xPlayer.showNotification(('~g~Ricompensa banca: %s'):format(totalReward))
+    if not NGEFramework.AddMoney(xPlayer, Config.MoneyAccount or 'money', totalReward, 'car-robbery-reward') then
+        print(('[CAR ROBBERY] payout failed for %s'):format(tostring(Config.MoneyAccount)))
+        return
     end
 
     if stage >= 3 then
-        activeMissions[xPlayer.identifier] = nil
+        activeMissions[NGEFramework.Identifier(xPlayer)] = nil
     else
         mission.stage = stage + 1
         mission.stageStartedAt = os.time()
@@ -131,31 +108,39 @@ AddEventHandler('esx_vehicle_theft:rewardPlayer', function(_clientDeliveryNumber
 end)
 
 -- Alert polizia
-RegisterNetEvent('esx_vehicle_theft:alertPolice')
-AddEventHandler('esx_vehicle_theft:alertPolice', function(coords, vehicleModel)
-    local xPlayers = ESX.GetPlayers()
-    
-    for i=1, #xPlayers, 1 do
-        local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
-        
-        if xPlayer then
-            for _, job in pairs(Config.PoliceJobs) do
-                if xPlayer.job.name == job then
-                    TriggerClientEvent('esx_vehicle_theft:policeAlert', xPlayers[i], coords, vehicleModel)
-                end
+RegisterNetEvent('nge_carrobbery:alertPolice')
+AddEventHandler('nge_carrobbery:alertPolice', function()
+    local src = source
+    local player = NGEFramework.Get(src)
+    if not player then return end
+    local mission = activeMissions[NGEFramework.Identifier(player)]
+    if not mission or not mission.netId then return end
+
+    local vehicle = NetworkGetEntityFromNetworkId(mission.netId)
+    if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) then return end
+    local coords = GetEntityCoords(vehicle)
+    local model = tostring(GetEntityModel(vehicle))
+
+    for _, playerId in ipairs(NGEFramework.Sources()) do
+        local target = NGEFramework.Get(playerId)
+        local job = target and NGEFramework.Job(target)
+        for _, allowed in ipairs(Config.PoliceJobs or {}) do
+            if job == allowed then
+                TriggerClientEvent('nge_carrobbery:policeAlert', playerId, coords, model)
+                break
             end
         end
     end
 end)
 
 -- Tracking veicolo
-RegisterNetEvent('esx_vehicle_theft:startTracking')
-AddEventHandler('esx_vehicle_theft:startTracking', function(netId)
+RegisterNetEvent('nge_carrobbery:startTracking')
+AddEventHandler('nge_carrobbery:startTracking', function(netId)
     local src = source
-    local xPlayer = ESX.GetPlayerFromId(src)
+    local xPlayer = NGEFramework.Get(src)
     if not xPlayer then return end
 
-    local mission = activeMissions[xPlayer.identifier]
+    local mission = activeMissions[NGEFramework.Identifier(xPlayer)]
     if not mission then return end
 
     local vehicle = NetworkGetEntityFromNetworkId(netId)
@@ -181,14 +166,14 @@ AddEventHandler('esx_vehicle_theft:startTracking', function(netId)
                     if not jammedVehicles[netId] then
                         local coords = GetEntityCoords(vehicle)
                         
-                        local xPlayers = ESX.GetPlayers()
+                        local xPlayers = NGEFramework.Sources()
                         for i=1, #xPlayers, 1 do
-                            local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+                            local xPlayer = NGEFramework.Get(xPlayers[i])
                             
                             if xPlayer then
                                 for _, job in pairs(Config.PoliceJobs) do
-                                    if xPlayer.job.name == job then
-                                        TriggerClientEvent('esx_vehicle_theft:updateTracking', xPlayers[i], netId, coords)
+                                    if NGEFramework.Job(xPlayer) == job then
+                                        TriggerClientEvent('nge_carrobbery:updateTracking', xPlayers[i], netId, coords)
                                     end
                                 end
                             end
@@ -205,24 +190,26 @@ AddEventHandler('esx_vehicle_theft:startTracking', function(netId)
     end
 end)
 
-RegisterNetEvent('esx_vehicle_theft:stopTracking')
-AddEventHandler('esx_vehicle_theft:stopTracking', function(netId)
-    if trackedVehicles[netId] then
-        trackedVehicles[netId].active = false
-        trackedVehicles[netId] = nil
-        
-        TriggerClientEvent('esx_vehicle_theft:removeTracking', -1, netId)
-    end
+RegisterNetEvent('nge_carrobbery:stopTracking')
+AddEventHandler('nge_carrobbery:stopTracking', function(netId)
+    local src = source
+    local player = NGEFramework.Get(src)
+    if not player then return end
+    local mission = activeMissions[NGEFramework.Identifier(player)]
+    if not mission or mission.netId ~= netId then return end
+    trackedVehicles[netId] = nil
+    jammedVehicles[netId] = nil
+    TriggerClientEvent('nge_carrobbery:removeTracking', -1, netId)
 end)
 
 -- GPS Jammer
-RegisterNetEvent('esx_vehicle_theft:activateJammer')
-AddEventHandler('esx_vehicle_theft:activateJammer', function(netId)
+RegisterNetEvent('nge_carrobbery:activateJammer')
+AddEventHandler('nge_carrobbery:activateJammer', function(netId)
     local src = source
-    local xPlayer = ESX.GetPlayerFromId(src)
+    local xPlayer = NGEFramework.Get(src)
     if not xPlayer then return end
 
-    local mission = activeMissions[xPlayer.identifier]
+    local mission = activeMissions[NGEFramework.Identifier(xPlayer)]
     if not mission or mission.netId ~= netId then
         print(('[CAR ROBBERY] Rejected jammer activation from %s'):format(src))
         return
@@ -230,32 +217,37 @@ AddEventHandler('esx_vehicle_theft:activateJammer', function(netId)
 
     jammedVehicles[netId] = true
     
-    local xPlayers = ESX.GetPlayers()
+    local xPlayers = NGEFramework.Sources()
     for i=1, #xPlayers, 1 do
-        local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+        local xPlayer = NGEFramework.Get(xPlayers[i])
         
         if xPlayer then
             for _, job in pairs(Config.PoliceJobs) do
-                if xPlayer.job.name == job then
-                    TriggerClientEvent('esx_vehicle_theft:jammerActivated', xPlayers[i], netId)
+                if NGEFramework.Job(xPlayer) == job then
+                    TriggerClientEvent('nge_carrobbery:jammerActivated', xPlayers[i], netId)
                 end
             end
         end
     end
 end)
 
-RegisterNetEvent('esx_vehicle_theft:deactivateJammer')
-AddEventHandler('esx_vehicle_theft:deactivateJammer', function(netId)
+RegisterNetEvent('nge_carrobbery:deactivateJammer')
+AddEventHandler('nge_carrobbery:deactivateJammer', function(netId)
+    local src = source
+    local player = NGEFramework.Get(src)
+    if not player then return end
+    local mission = activeMissions[NGEFramework.Identifier(player)]
+    if not mission or mission.netId ~= netId then return end
     jammedVehicles[netId] = nil
     
-    local xPlayers = ESX.GetPlayers()
+    local xPlayers = NGEFramework.Sources()
     for i=1, #xPlayers, 1 do
-        local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+        local xPlayer = NGEFramework.Get(xPlayers[i])
         
         if xPlayer then
             for _, job in pairs(Config.PoliceJobs) do
-                if xPlayer.job.name == job then
-                    TriggerClientEvent('esx_vehicle_theft:jammerDeactivated', xPlayers[i], netId)
+                if NGEFramework.Job(xPlayer) == job then
+                    TriggerClientEvent('nge_carrobbery:jammerDeactivated', xPlayers[i], netId)
                 end
             end
         end
@@ -265,31 +257,31 @@ end)
 -- Pulizia disconnect
 AddEventHandler('playerDropped', function()
     local src = source
-    local xPlayer = ESX.GetPlayerFromId(src)
+    local xPlayer = NGEFramework.Get(src)
     
     if xPlayer then
-        activeMissions[xPlayer.identifier] = nil
+        activeMissions[NGEFramework.Identifier(xPlayer)] = nil
     end
     
     for netId, data in pairs(trackedVehicles) do
         if data.source == src then
             trackedVehicles[netId] = nil
-            TriggerClientEvent('esx_vehicle_theft:removeTracking', -1, netId)
+            TriggerClientEvent('nge_carrobbery:removeTracking', -1, netId)
         end
     end
 end)
 
 RegisterNetEvent('nge_carrobbery:endMission', function()
     local src = source
-    local xPlayer = ESX.GetPlayerFromId(src)
+    local xPlayer = NGEFramework.Get(src)
     if not xPlayer then return end
 
-    local mission = activeMissions[xPlayer.identifier]
+    local mission = activeMissions[NGEFramework.Identifier(xPlayer)]
     if mission and mission.netId then
         trackedVehicles[mission.netId] = nil
         jammedVehicles[mission.netId] = nil
-        TriggerClientEvent('esx_vehicle_theft:removeTracking', -1, mission.netId)
+        TriggerClientEvent('nge_carrobbery:removeTracking', -1, mission.netId)
     end
 
-    activeMissions[xPlayer.identifier] = nil
+    activeMissions[NGEFramework.Identifier(xPlayer)] = nil
 end)
